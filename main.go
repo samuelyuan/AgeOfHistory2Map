@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	supportedMapNames = "[regions, 1440, modernworld]"
+	supportedMapNames = "[regions, 1200, 1440, modernworld]"
 )
 
 func main() {
@@ -25,6 +25,9 @@ func main() {
 	if mapName == "regions" {
 		regionsMapData := loadRegionsMap()
 		drawRegionsMap(outputFilename, regionsMapData)
+	} else if mapName == "1200" {
+		scenario := loadScenario("1200")
+		drawScenarioMap(outputFilename, scenario)
 	} else if mapName == "1440" {
 		scenario := loadScenario("1440")
 		drawScenarioMap(outputFilename, scenario)

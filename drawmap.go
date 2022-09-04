@@ -17,7 +17,7 @@ func drawScenarioMap(outputFilename string, scenario Scenario) {
 
 	fmt.Println("Drawing map...")
 	drawScenarioRegionColors(dc, scenario.AllProvinceData, scenario.AllProvinceOwners, scenario.AllCivColors)
-	drawProvinceOutline(dc, scenario.AllProvinceData)
+	// drawProvinceOutline(dc, scenario.AllProvinceData)
 
 	dc.SavePNG(outputFilename)
 	fmt.Println("Saved image to", outputFilename)

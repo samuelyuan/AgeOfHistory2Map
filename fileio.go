@@ -21,9 +21,9 @@ const (
 )
 
 type ProvinceBorderGameData struct {
-	WithProvinceID uint32   `json:"withProvinceID"`
-	LPointsX       []uint16 `json:"lPointsX"`
-	LPointsY       []uint16 `json:"lPointsY"`
+	WithProvinceID int   `json:"withProvinceID"`
+	LPointsX       []int `json:"lPointsX"`
+	LPointsY       []int `json:"lPointsY"`
 }
 
 type ProvinceInfo struct {
@@ -67,6 +67,18 @@ type CivilizationColor struct {
 
 type ProvinceOwners struct {
 	LProvinceOwners []int `json:"lProvinceOwners"`
+}
+
+type SaveDataProvinces struct {
+	LProvincesData []SaveProvinceInfo `json:"lProvincesData"`
+}
+
+type SaveProvinceInfo struct {
+	IEconomy int `json:"iEconomy"`
+}
+
+type SaveDataOutput struct {
+	CivEconomyMap map[int]int
 }
 
 type RegionsMapData struct {
@@ -205,6 +217,36 @@ func loadRegionsMap() RegionsMapData {
 		GlobalMaxY:      globalMaxY,
 		AllProvinceData: allProvinceData,
 		AllRegionColors: allRegionColors,
+	}
+}
+
+func loadSavedProvincesData(saveFolder string, allProvinceOwners []int) SaveDataOutput {
+	saveDataBytes, err := parseJsonFile(fmt.Sprintf("data/saves/%v/%v_4", saveFolder, saveFolder))
+	if err != nil {
+		log.Fatal("Failed to read input file: ", err)
+	}
+
+	var saveDataProvinces []SaveDataProvinces
+	err = json.Unmarshal(saveDataBytes, &saveDataProvinces)
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+	fmt.Println("saveDataProvinces:", saveDataProvinces)
+
+	civEconomyMap := make(map[int]int)
+	for i := 0; i < len(allProvinceOwners); i++ {
+		provinceOwner := allProvinceOwners[i]
+		mapKey := provinceOwner - 1
+		_, ok := civEconomyMap[mapKey]
+		if !ok {
+			civEconomyMap[mapKey] = 0
+		}
+		civEconomyMap[mapKey] += saveDataProvinces[0].LProvincesData[i].IEconomy
+	}
+
+	fmt.Println("Civ economy map:", civEconomyMap)
+	return SaveDataOutput{
+		CivEconomyMap: civEconomyMap,
 	}
 }
 
