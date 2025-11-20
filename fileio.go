@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -14,10 +13,28 @@ import (
 )
 
 const (
-	provinceDir    = "data/map/Earth/data/provinces"
-	regionListFile = "data/map/data/regions/packges/Earth_AoC2"
-	regionFile     = "data/map/data/regions/packges_data/%v"
-	imageScale     = 1
+	// Base data directory
+	dataDir = "data"
+
+	// Directory paths
+	provinceDir = dataDir + "/map/Earth/data/provinces"
+
+	// Region file paths
+	regionListFile = dataDir + "/map/data/regions/packges/Earth_AoC2"
+	regionFile     = dataDir + "/map/data/regions/packges_data/%v"
+
+	// Scenario file paths
+	scenarioDataPath     = dataDir + "/map/Earth/scenarios/%v/%v"
+	scenarioProvincePath = dataDir + "/map/Earth/scenarios/%v/%v_PD"
+
+	// Civilization file paths
+	civilizationPath = dataDir + "/game/civilizations/%v"
+
+	// Save file paths
+	saveDataPath = dataDir + "/saves/%v/%v_4"
+
+	// Image settings
+	imageScale = 1
 )
 
 type ProvinceBorderGameData struct {
@@ -128,7 +145,10 @@ func parseJsonFile(inputFilename string) ([]byte, error) {
 }
 
 func loadAllProvinces() ([][]ProvinceGameData, int, int) {
-	files, _ := ioutil.ReadDir(provinceDir)
+	files, err := os.ReadDir(provinceDir)
+	if err != nil {
+		log.Fatalf("Failed to read provinces directory '%s': %v\nMake sure the data directory structure is correct.", provinceDir, err)
+	}
 	maxProvinces := len(files)
 	fmt.Println("Number of provinces:", maxProvinces)
 
@@ -221,7 +241,7 @@ func loadRegionsMap() RegionsMapData {
 }
 
 func loadSavedProvincesData(saveFolder string, allProvinceOwners []int) SaveDataOutput {
-	saveDataBytes, err := parseJsonFile(fmt.Sprintf("data/saves/%v/%v_4", saveFolder, saveFolder))
+	saveDataBytes, err := parseJsonFile(fmt.Sprintf(saveDataPath, saveFolder, saveFolder))
 	if err != nil {
 		log.Fatal("Failed to read input file: ", err)
 	}
@@ -251,7 +271,7 @@ func loadSavedProvincesData(saveFolder string, allProvinceOwners []int) SaveData
 }
 
 func loadScenario(scenario string) Scenario {
-	scenarioDataBytes, err := parseJsonFile(fmt.Sprintf("data/map/Earth/scenarios/%v/%v", scenario, scenario))
+	scenarioDataBytes, err := parseJsonFile(fmt.Sprintf(scenarioDataPath, scenario, scenario))
 	if err != nil {
 		log.Fatal("Failed to read input file: ", err)
 	}
@@ -264,7 +284,7 @@ func loadScenario(scenario string) Scenario {
 	}
 	fmt.Println("Scenario data:", scenarioData)
 
-	provinceOwnersBytes, err := parseJsonFile(fmt.Sprintf("data/map/Earth/scenarios/%v/%v_PD", scenario, scenario))
+	provinceOwnersBytes, err := parseJsonFile(fmt.Sprintf(scenarioProvincePath, scenario, scenario))
 	if err != nil {
 		log.Fatal("Failed to read input file: ", err)
 	}
@@ -284,7 +304,7 @@ func loadScenario(scenario string) Scenario {
 	for i := 0; i < numCivs; i++ {
 		civTag := scenarioData[0].LCivsTags[i]
 
-		if _, err := os.Stat(fmt.Sprintf("data/game/civilizations/%v", civTag)); errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(fmt.Sprintf(civilizationPath, civTag)); errors.Is(err, os.ErrNotExist) {
 			fmt.Println("File for civ tag", civTag, "doesn't exist")
 			tagEndings := []string{"_r", "_c", "_m", "_s", "_h", "_t"}
 			for j := 0; j < len(tagEndings); j++ {
@@ -295,7 +315,7 @@ func loadScenario(scenario string) Scenario {
 			}
 		}
 
-		civilizationDataBytes, err := parseJsonFile(fmt.Sprintf("data/game/civilizations/%v", civTag))
+		civilizationDataBytes, err := parseJsonFile(fmt.Sprintf(civilizationPath, civTag))
 		if err != nil {
 			log.Fatal("Failed to read input file: ", err)
 		}

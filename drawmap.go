@@ -8,11 +8,35 @@ import (
 	"github.com/fogleman/gg"
 )
 
+type Color struct {
+	R, G, B int
+}
+
+var (
+	// Water color (dark blue)
+	waterColor = Color{R: 15, G: 27, B: 41}
+
+	// Water color alternative (lighter blue, used in terrain view)
+	waterColorAlt = Color{R: 47, G: 74, B: 93}
+
+	// Default land color (green)
+	landColor = Color{R: 105, G: 125, B: 54}
+
+	// Unclaimed land color (dark gray)
+	unclaimedLandColor = Color{R: 16, G: 16, B: 16}
+
+	// Outline color (black)
+	outlineColor = Color{R: 0, G: 0, B: 0}
+
+	// Label color (white)
+	labelColor = Color{R: 255, G: 255, B: 255}
+)
+
 func drawScenarioMap(outputFilename string, scenario Scenario) {
 	dc := gg.NewContext(int(scenario.GlobalMaxX), int(scenario.GlobalMaxY))
 
 	// water
-	dc.SetRGB255(15, 27, 41)
+	dc.SetRGB255(waterColor.R, waterColor.G, waterColor.B)
 	dc.Clear()
 
 	fmt.Println("Drawing map...")
@@ -37,11 +61,11 @@ func drawScenarioRegionColors(dc *gg.Context, allProvinceData [][]ProvinceGameDa
 			provinceOwner := allProvinceOwners[i] - 1
 			if province.ProvinceInfo.IContinentID == 0 || province.ProvinceInfo.STerrainTAG == "" {
 				// water
-				dc.SetRGB255(15, 27, 41)
+				dc.SetRGB255(waterColor.R, waterColor.G, waterColor.B)
 			} else if provinceOwner < 0 || provinceOwner >= len(allCivColors) {
 				// land doesn't belong to any owner
 				fmt.Println("Province owner", provinceOwner, "isn't a valid province")
-				dc.SetRGB255(16, 16, 16)
+				dc.SetRGB255(unclaimedLandColor.R, unclaimedLandColor.G, unclaimedLandColor.B)
 			} else {
 				// belongs to province owner
 				provinceColor := allCivColors[provinceOwner]
@@ -57,7 +81,7 @@ func drawRegionsMap(outputFilename string, regionsMapData RegionsMapData) {
 	dc := gg.NewContext(int(regionsMapData.GlobalMaxX), int(regionsMapData.GlobalMaxY))
 
 	// water
-	dc.SetRGB255(15, 27, 41)
+	dc.SetRGB255(waterColor.R, waterColor.G, waterColor.B)
 	dc.Clear()
 
 	fmt.Println("Drawing map...")
@@ -82,10 +106,10 @@ func drawProvinceTerrain(dc *gg.Context, allProvinceData [][]ProvinceGameData) {
 
 			if province.ProvinceInfo.IContinentID == 0 || province.ProvinceInfo.STerrainTAG == "" {
 				// water
-				dc.SetRGB255(47, 74, 93)
+				dc.SetRGB255(waterColorAlt.R, waterColorAlt.G, waterColorAlt.B)
 			} else {
 				// land
-				dc.SetRGB255(105, 125, 54)
+				dc.SetRGB255(landColor.R, landColor.G, landColor.B)
 			}
 			dc.Fill()
 		}
@@ -105,10 +129,10 @@ func drawProvinceRegionColors(dc *gg.Context, allProvinceData [][]ProvinceGameDa
 
 			if province.ProvinceInfo.IContinentID == 0 || province.ProvinceInfo.STerrainTAG == "" {
 				// water
-				dc.SetRGB255(15, 27, 41)
+				dc.SetRGB255(waterColor.R, waterColor.G, waterColor.B)
 			} else if province.ProvinceInfo.IRegionID < 0 || province.ProvinceInfo.IRegionID >= len(allRegionColors) {
 				// land doesn't belong to valid region
-				dc.SetRGB255(105, 125, 54)
+				dc.SetRGB255(landColor.R, landColor.G, landColor.B)
 			} else {
 				// region color
 				regionId := province.ProvinceInfo.IRegionID
@@ -124,7 +148,7 @@ func drawProvinceOutline(dc *gg.Context, allProvinceData [][]ProvinceGameData) {
 	for i := 0; i < len(allProvinceData); i++ {
 		for p := 0; p < len(allProvinceData[i]); p++ {
 			province := allProvinceData[i][p]
-			dc.SetRGB255(0, 0, 0)
+			dc.SetRGB255(outlineColor.R, outlineColor.G, outlineColor.B)
 
 			for j := 0; j < len(province.LPointsX); j++ {
 				currentIndex := j % len(province.LPointsX)
@@ -165,7 +189,7 @@ func drawProvinceLabel(dc *gg.Context, allProvinceData [][]ProvinceGameData) {
 				}
 			}
 
-			dc.SetRGB255(255, 255, 255)
+			dc.SetRGB255(labelColor.R, labelColor.G, labelColor.B)
 			averageX := (provinceMinX + provinceMaxX) / 2.0
 			averageY := (provinceMinY + provinceMaxY) / 2.0
 			fmt.Println(fmt.Sprintf("Province %v bounds min(%v, %v), max (%v, %v), average(%v, %v)",

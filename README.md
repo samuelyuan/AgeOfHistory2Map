@@ -26,7 +26,9 @@ Example
 
 The map data from Age of History 2 is split into multiple files. This program assumes the user is trying to load a scenario on the Earth map. Each scenario is stored under the folder with the scenario name in "map/Earth/scenarios/". Each file is a serialized java object.
 
-* The scenario file consists of a list of civilization tags, which are represented as strings. The file is located in the scenario folder and has the same name as the scenario without any extensions.
-* The province owners file consists of a list of province owners, which are represented as integers. Each province's owner corresponds to a civilization. The file is located in the scenario folder and ends in "_PD".
-* The civilizations file contains a list of civilizations with the tag and the color in RGB format. This is the color that will show on the map for all provinces owned by a civilization. The files are located in "game/civilizations".
-* The provinces file contains the geometry of the province. It has a separate list of X and Y coordinates which can be used to draw the shape. The files are located in "map/Earth/data/provinces".
+| File Type | Description | Data Format | Location |
+|-----------|-------------|-------------|----------|
+| Scenario file | List of civilization tags | Strings | Scenario folder, same name as scenario (no extension) |
+| Province owners file | List of province owners | Integers (each corresponds to a civilization) | Scenario folder, ends in "_PD" |
+| Civilizations file | List of civilizations with tag and color | Tag and RGB color format | "game/civilizations" |
+| Provinces file | Geometry of provinces | Separate lists of X and Y coordinates | "map/Earth/data/provinces" |
