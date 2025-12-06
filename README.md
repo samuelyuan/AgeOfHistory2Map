@@ -24,11 +24,11 @@ Example
 
 ## File Format
 
-The map data from Age of History 2 is split into multiple files. This program assumes the user is trying to load a scenario on the Earth map. Each scenario is stored under the folder with the scenario name in "map/Earth/scenarios/". Each file is a serialized java object.
+The map data from Age of History 2 is split into multiple files. This program assumes the user is trying to load a scenario on the Earth map. Each file is a serialized java object.
 
 | File Type | Description | Data Format | Location |
 |-----------|-------------|-------------|----------|
-| Scenario file | List of civilization tags | Strings | Scenario folder, same name as scenario (no extension) |
-| Province owners file | List of province owners | Integers (each corresponds to a civilization) | Scenario folder, ends in "_PD" |
-| Civilizations file | List of civilizations with tag and color | Tag and RGB color format | "game/civilizations" |
-| Provinces file | Geometry of provinces | Separate lists of X and Y coordinates | "map/Earth/data/provinces" |
+| Scenario file | List of civilization tags | Strings | "data/map/Earth/scenarios/{scenario}/{scenario}" |
+| Province owners file | List of province owners | Integers (each corresponds to a civilization) | "data/map/Earth/scenarios/{scenario}/{scenario}_PD" |
+| Civilizations file | List of civilizations with tag and color | Tag and RGB color format | "data/game/civilizations/{civTag}" |
+| Provinces file | Geometry of provinces | Separate lists of X and Y coordinates | "data/map/Earth/data/provinces/{provinceId}" |
