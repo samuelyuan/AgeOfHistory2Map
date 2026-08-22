@@ -113,13 +113,29 @@ type Scenario struct {
 	AllCivColors      []CivilizationColor
 }
 
+// checkDataDirectory verifies that dir exists and is a directory, returning a friendly,
+// actionable error otherwise. Called once up front so a missing game data folder produces one
+// clear message instead of failing deep inside a specific file loader.
+func checkDataDirectory(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf(
+			"could not find a '%s' folder in the current directory.\n"+
+				"Copy your Age of History 2 game data into a folder named '%s' next to this program, then run it again.\n"+
+				"See the README for the expected folder layout (data/map/..., data/game/..., data/saves/...)",
+			dir, dir)
+	}
+	return nil
+}
+
 func parseJsonFile(inputFilename string) ([]byte, error) {
 	inputFile, err := os.Open(inputFilename)
-	defer inputFile.Close()
 	if err != nil {
 		log.Fatal("Failed to load map: ", err)
 		return []byte{}, err
 	}
+	defer inputFile.Close()
+
 	fi, err := inputFile.Stat()
 	if err != nil {
 		log.Fatal(err)
@@ -144,6 +160,48 @@ func parseJsonFile(inputFilename string) ([]byte, error) {
 	return jsonBytes, nil
 }
 
+// loadJsonArray reads and parses a data file that decodes to a JSON array of T.
+// It centralizes the parse-then-unmarshal pattern shared by every loader below.
+func loadJsonArray[T any](filename string) ([]T, error) {
+	jsonBytes, err := parseJsonFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []T
+	if err := json.Unmarshal(jsonBytes, &items); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s: %w", filename, err)
+	}
+	return items, nil
+}
+
+// scaleProvincePoints scales every point of every province in place by the given factor.
+func scaleProvincePoints(provinces []ProvinceGameData, scale int) {
+	for p := range provinces {
+		for j := range provinces[p].LPointsX {
+			provinces[p].LPointsX[j] *= scale
+			provinces[p].LPointsY[j] *= scale
+		}
+	}
+}
+
+// computeGlobalBounds returns the maximum X and Y coordinate across all province points.
+func computeGlobalBounds(allProvinceData [][]ProvinceGameData) (globalMaxX int, globalMaxY int) {
+	for _, provinces := range allProvinceData {
+		for _, province := range provinces {
+			for j := range province.LPointsX {
+				if province.LPointsX[j] > globalMaxX {
+					globalMaxX = province.LPointsX[j]
+				}
+				if province.LPointsY[j] > globalMaxY {
+					globalMaxY = province.LPointsY[j]
+				}
+			}
+		}
+	}
+	return globalMaxX, globalMaxY
+}
+
 func loadAllProvinces() ([][]ProvinceGameData, int, int) {
 	files, err := os.ReadDir(provinceDir)
 	if err != nil {
@@ -151,61 +209,29 @@ func loadAllProvinces() ([][]ProvinceGameData, int, int) {
 	}
 	maxProvinces := len(files)
 	fmt.Println("Number of provinces:", maxProvinces)
-
-	globalMaxX := 0
-	globalMaxY := 0
 	fmt.Println("Loading provinces...")
 
 	allProvinceData := make([][]ProvinceGameData, maxProvinces)
 	for i := 0; i < len(allProvinceData); i++ {
 		provinceFileName := fmt.Sprintf("%v/%v", provinceDir, i)
-		jsonBytes, err := parseJsonFile(provinceFileName)
+		provinces, err := loadJsonArray[ProvinceGameData](provinceFileName)
 		if err != nil {
 			log.Fatal("Failed to read input file: ", err)
 		}
-
-		var provinces []ProvinceGameData
-		err = json.Unmarshal(jsonBytes, &provinces)
-		if err != nil {
-			fmt.Println("error:", err)
-		}
 		fmt.Println("Province", i, ":", provinces[0].ProvinceInfo)
+
+		scaleProvincePoints(provinces, imageScale)
 		allProvinceData[i] = provinces
-
-		// Scale all points
-		for p := 0; p < len(allProvinceData[i]); p++ {
-			province := allProvinceData[i][p]
-			for j := 0; j < len(province.LPointsX); j++ {
-				allProvinceData[i][p].LPointsX[j] *= imageScale
-				allProvinceData[i][p].LPointsY[j] *= imageScale
-			}
-		}
-
-		for p := 0; p < len(allProvinceData[i]); p++ {
-			province := allProvinceData[i][p]
-			for j := 0; j < len(province.LPointsX); j++ {
-				currentIndex := j
-				if int(province.LPointsX[currentIndex]) > globalMaxX {
-					globalMaxX = int(province.LPointsX[currentIndex])
-				}
-				if int(province.LPointsY[currentIndex]) > globalMaxY {
-					globalMaxY = int(province.LPointsY[currentIndex])
-				}
-			}
-		}
 	}
+
+	globalMaxX, globalMaxY := computeGlobalBounds(allProvinceData)
 	return allProvinceData, globalMaxX, globalMaxY
 }
 
 func loadRegionsMap() RegionsMapData {
-	regionListBytes, err := parseJsonFile(regionListFile)
+	regionFilenames, err := loadJsonArray[RegionList](regionListFile)
 	if err != nil {
 		log.Fatal("Failed to read input file: ", err)
-	}
-	var regionFilenames []RegionList
-	err = json.Unmarshal(regionListBytes, &regionFilenames)
-	if err != nil {
-		fmt.Println("Error:", err)
 	}
 	fmt.Println("Region filenames:", regionFilenames)
 
@@ -213,17 +239,10 @@ func loadRegionsMap() RegionsMapData {
 	fmt.Println("Number regions in regions file:", numberRegions)
 
 	allRegionColors := make([]RegionColor, numberRegions)
-
 	for i := 0; i < numberRegions; i++ {
-		regionDataBytes, err := parseJsonFile(fmt.Sprintf(regionFile, regionFilenames[0].LRegionsTags[i]))
-
+		regionData, err := loadJsonArray[RegionColor](fmt.Sprintf(regionFile, regionFilenames[0].LRegionsTags[i]))
 		if err != nil {
 			log.Fatal("Failed to read input file: ", err)
-		}
-		var regionData []RegionColor
-		err = json.Unmarshal(regionDataBytes, &regionData)
-		if err != nil {
-			fmt.Println("Error:", err)
 		}
 		fmt.Println("Region", i, "data:", regionData)
 		allRegionColors[i] = regionData[0]
@@ -240,59 +259,61 @@ func loadRegionsMap() RegionsMapData {
 	}
 }
 
+// computeCivEconomyMap sums each province's economy value into its owning civilization's total
+// (keyed by owner id - 1, matching the save format). Provinces beyond the bounds of provincesData
+// are skipped rather than panicking. Pure: safe to unit test without any save files on disk.
+func computeCivEconomyMap(allProvinceOwners []int, provincesData []SaveProvinceInfo) map[int]int {
+	civEconomyMap := make(map[int]int)
+	for i, provinceOwner := range allProvinceOwners {
+		if i >= len(provincesData) {
+			continue
+		}
+		mapKey := provinceOwner - 1
+		civEconomyMap[mapKey] += provincesData[i].IEconomy
+	}
+	return civEconomyMap
+}
+
 func loadSavedProvincesData(saveFolder string, allProvinceOwners []int) SaveDataOutput {
-	saveDataBytes, err := parseJsonFile(fmt.Sprintf(saveDataPath, saveFolder, saveFolder))
+	saveDataProvinces, err := loadJsonArray[SaveDataProvinces](fmt.Sprintf(saveDataPath, saveFolder, saveFolder))
 	if err != nil {
 		log.Fatal("Failed to read input file: ", err)
 	}
-
-	var saveDataProvinces []SaveDataProvinces
-	err = json.Unmarshal(saveDataBytes, &saveDataProvinces)
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
 	fmt.Println("saveDataProvinces:", saveDataProvinces)
 
-	civEconomyMap := make(map[int]int)
-	for i := 0; i < len(allProvinceOwners); i++ {
-		provinceOwner := allProvinceOwners[i]
-		mapKey := provinceOwner - 1
-		_, ok := civEconomyMap[mapKey]
-		if !ok {
-			civEconomyMap[mapKey] = 0
-		}
-		civEconomyMap[mapKey] += saveDataProvinces[0].LProvincesData[i].IEconomy
-	}
-
+	civEconomyMap := computeCivEconomyMap(allProvinceOwners, saveDataProvinces[0].LProvincesData)
 	fmt.Println("Civ economy map:", civEconomyMap)
 	return SaveDataOutput{
 		CivEconomyMap: civEconomyMap,
 	}
 }
 
+// knownCivTagSuffixes lists the suffixes stripped from a civ tag when its data file is missing,
+// e.g. "french_r" falls back to the base civ "french".
+var knownCivTagSuffixes = []string{"_r", "_c", "_m", "_s", "_h", "_t"}
+
+// stripKnownCivTagSuffix removes the first matching known suffix from a civ tag, if any.
+// Pure: separated from the filesystem check in loadScenario so the fallback logic can be
+// unit tested directly.
+func stripKnownCivTagSuffix(civTag string) (stripped string, suffixRemoved string, ok bool) {
+	for _, suffix := range knownCivTagSuffixes {
+		if idx := strings.Index(civTag, suffix); idx != -1 {
+			return civTag[:idx], suffix, true
+		}
+	}
+	return civTag, "", false
+}
+
 func loadScenario(scenario string) Scenario {
-	scenarioDataBytes, err := parseJsonFile(fmt.Sprintf(scenarioDataPath, scenario, scenario))
+	scenarioData, err := loadJsonArray[ScenarioData](fmt.Sprintf(scenarioDataPath, scenario, scenario))
 	if err != nil {
 		log.Fatal("Failed to read input file: ", err)
-	}
-	fmt.Println("Sceario data raw:", string(scenarioDataBytes))
-
-	var scenarioData []ScenarioData
-	err = json.Unmarshal(scenarioDataBytes, &scenarioData)
-	if err != nil {
-		fmt.Println("Error:", err)
 	}
 	fmt.Println("Scenario data:", scenarioData)
 
-	provinceOwnersBytes, err := parseJsonFile(fmt.Sprintf(scenarioProvincePath, scenario, scenario))
+	provinceOwners, err := loadJsonArray[ProvinceOwners](fmt.Sprintf(scenarioProvincePath, scenario, scenario))
 	if err != nil {
 		log.Fatal("Failed to read input file: ", err)
-	}
-
-	var provinceOwners []ProvinceOwners
-	err = json.Unmarshal(provinceOwnersBytes, &provinceOwners)
-	if err != nil {
-		fmt.Println("Error:", err)
 	}
 	allProvinceOwners := provinceOwners[0].LProvinceOwners
 	fmt.Println("Province owners:", allProvinceOwners)
@@ -306,23 +327,15 @@ func loadScenario(scenario string) Scenario {
 
 		if _, err := os.Stat(fmt.Sprintf(civilizationPath, civTag)); errors.Is(err, os.ErrNotExist) {
 			fmt.Println("File for civ tag", civTag, "doesn't exist")
-			tagEndings := []string{"_r", "_c", "_m", "_s", "_h", "_t"}
-			for j := 0; j < len(tagEndings); j++ {
-				if strings.Contains(civTag, tagEndings[j]) {
-					civTag = civTag[0:strings.Index(civTag, tagEndings[j])]
-					fmt.Println(fmt.Sprintf("Removing '%v' from civ %v tag", tagEndings[j], i))
-				}
+			if stripped, suffix, ok := stripKnownCivTagSuffix(civTag); ok {
+				fmt.Printf("Removing '%v' from civ %v tag\n", suffix, i)
+				civTag = stripped
 			}
 		}
 
-		civilizationDataBytes, err := parseJsonFile(fmt.Sprintf(civilizationPath, civTag))
+		civilizationColor, err := loadJsonArray[CivilizationColor](fmt.Sprintf(civilizationPath, civTag))
 		if err != nil {
 			log.Fatal("Failed to read input file: ", err)
-		}
-		var civilizationColor []CivilizationColor
-		err = json.Unmarshal(civilizationDataBytes, &civilizationColor)
-		if err != nil {
-			fmt.Println("Error:", err)
 		}
 		fmt.Println("Civilization color:", civilizationColor)
 		allCivColors[i] = civilizationColor[0]

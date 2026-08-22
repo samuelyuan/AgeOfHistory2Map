@@ -27,28 +27,34 @@ func init() {
 	supportedMapNames = "[" + strings.Join(validMapNamesList, ", ") + "]"
 }
 
+// defaultOutputFilename returns the output filename to use when the user doesn't pass -output,
+// so e.g. `-map modernworld` alone produces "modern.png" instead of a generic "output.png". Pure.
+func defaultOutputFilename(mapName string) string {
+	if mapName == "modernworld" {
+		return "modern.png"
+	}
+	return mapName + ".png"
+}
+
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "Options:\n")
 	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, "\nThis program renders maps from Age of History 2 game data. It expects a '%s' folder\n", dataDir)
+	fmt.Fprintf(os.Stderr, "with a copy of the game's data files to exist in the current directory (see the README\n")
+	fmt.Fprintf(os.Stderr, "for the expected folder layout).\n")
 	fmt.Fprintf(os.Stderr, "\nExamples:\n")
 	for _, mapName := range validMapNamesList {
-		outputName := mapName + ".png"
-		if mapName == "modernworld" {
-			outputName = "modern.png"
-		}
-		fmt.Fprintf(os.Stderr, "  %s -map %s -output %s\n", os.Args[0], mapName, outputName)
+		fmt.Fprintf(os.Stderr, "  %s -map %s -output %s\n", os.Args[0], mapName, defaultOutputFilename(mapName))
 	}
 }
 
 func main() {
-	inputPtr := flag.String("input", "", "Input file (optional)")
-	outputPtr := flag.String("output", "output.png", "Output filename")
+	outputPtr := flag.String("output", "", "Output filename (default: \"<map name>.png\")")
 	mapPtr := flag.String("map", "regions", "Map name "+supportedMapNames)
 	flag.Usage = printUsage
 	flag.Parse()
 
-	outputFilename := *outputPtr
 	mapName := *mapPtr
 
 	// Validate map name
@@ -59,7 +65,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Input filename: ", *inputPtr)
+	outputFilename := *outputPtr
+	if outputFilename == "" {
+		outputFilename = defaultOutputFilename(mapName)
+	}
+
+	// Check for the game data folder up front, so a missing/misplaced data/ directory produces
+	// one clear, actionable message instead of a confusing failure deep inside file loading.
+	if err := checkDataDirectory(dataDir); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		fmt.Fprintln(os.Stderr)
+		printUsage()
+		os.Exit(1)
+	}
+
 	fmt.Println("Output filename: ", outputFilename)
 	fmt.Println("Map name: ", mapName)
 

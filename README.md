@@ -16,11 +16,17 @@ Example
 ## Examples
 
 <div style="display:inline-block;">
-<img src="https://raw.githubusercontent.com/samuelyuan/AgeOfHistory2Map/master/screenshots/modernworld.png" alt="modernworld" width="510" height="300" />
-<img src="https://raw.githubusercontent.com/samuelyuan/AgeOfHistory2Map/master/screenshots/1440.png" alt="1440" width="510" height="300" />
-<img src="https://raw.githubusercontent.com/samuelyuan/AgeOfHistory2Map/master/screenshots/regions.png" alt="regions" width="510" height="300" />
+<img src="screenshots/modernworld.png" alt="modernworld" width="510" height="300" />
+<img src="screenshots/1440.png" alt="1440" width="510" height="300" />
+<img src="screenshots/regions.png" alt="regions" width="510" height="300" />
 </div>
 
+
+## Running Tests
+
+```
+go test ./...
+```
 
 ## File Format
 

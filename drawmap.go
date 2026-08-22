@@ -12,6 +12,26 @@ type Color struct {
 	R, G, B int
 }
 
+// Apply sets the drawing context's current color to this color.
+func (c Color) Apply(dc *gg.Context) {
+	dc.SetRGB255(c.R, c.G, c.B)
+}
+
+// toFraction converts a 0-255 Color to the 0-1 fraction form used by FractionColor.
+func (c Color) toFraction() FractionColor {
+	return FractionColor{R: float64(c.R) / 255, G: float64(c.G) / 255, B: float64(c.B) / 255}
+}
+
+// FractionColor is a color expressed as 0-1 fractions, matching the format region data is stored in.
+type FractionColor struct {
+	R, G, B float64
+}
+
+// Apply sets the drawing context's current color to this color.
+func (c FractionColor) Apply(dc *gg.Context) {
+	dc.SetRGB(c.R, c.G, c.B)
+}
+
 var (
 	// Water color (dark blue)
 	waterColor = Color{R: 15, G: 27, B: 41}
@@ -36,7 +56,7 @@ func drawScenarioMap(outputFilename string, scenario Scenario) {
 	dc := gg.NewContext(int(scenario.GlobalMaxX), int(scenario.GlobalMaxY))
 
 	// water
-	dc.SetRGB255(waterColor.R, waterColor.G, waterColor.B)
+	waterColor.Apply(dc)
 	dc.Clear()
 
 	fmt.Println("Drawing map...")
@@ -47,31 +67,50 @@ func drawScenarioMap(outputFilename string, scenario Scenario) {
 	fmt.Println("Saved image to", outputFilename)
 }
 
+// buildProvincePath traces a province's boundary as the current path on the drawing context.
+func buildProvincePath(dc *gg.Context, province ProvinceGameData) {
+	dc.MoveTo(float64(province.LPointsX[0]), float64(province.LPointsY[0]))
+	for j := 1; j < len(province.LPointsX); j++ {
+		dc.LineTo(float64(province.LPointsX[j]), float64(province.LPointsY[j]))
+	}
+	dc.ClosePath()
+}
+
+// isWaterProvince reports whether a province represents water rather than land. Pure.
+func isWaterProvince(province ProvinceGameData) bool {
+	return province.ProvinceInfo.IContinentID == 0 || province.ProvinceInfo.STerrainTAG == ""
+}
+
+// determineScenarioProvinceColor returns the fill color for a province on the scenario (ownership)
+// map, along with whether provinceOwner referred to a valid civilization. Pure: makes no calls to
+// dc, so the ownership/coloring decision can be unit tested without a drawing context.
+func determineScenarioProvinceColor(province ProvinceGameData, provinceOwner int, allCivColors []CivilizationColor) (color Color, ownerValid bool) {
+	if isWaterProvince(province) {
+		return waterColor, true
+	}
+	if provinceOwner < 0 || provinceOwner >= len(allCivColors) {
+		return unclaimedLandColor, false
+	}
+	civColor := allCivColors[provinceOwner]
+	return Color{R: civColor.IRed, G: civColor.IGreen, B: civColor.IBlue}, true
+}
+
 func drawScenarioRegionColors(dc *gg.Context, allProvinceData [][]ProvinceGameData, allProvinceOwners []int, allCivColors []CivilizationColor) {
 	for i := 0; i < len(allProvinceData); i++ {
 		for p := 0; p < len(allProvinceData[i]); p++ {
 			province := allProvinceData[i][p]
-
-			dc.MoveTo(float64(province.LPointsX[0]), float64(province.LPointsY[0]))
-			for j := 1; j < len(province.LPointsX); j++ {
-				dc.LineTo(float64(province.LPointsX[j]), float64(province.LPointsY[j]))
-			}
-			dc.ClosePath()
+			buildProvincePath(dc, province)
 
 			provinceOwner := allProvinceOwners[i] - 1
-			if province.ProvinceInfo.IContinentID == 0 || province.ProvinceInfo.STerrainTAG == "" {
-				// water
-				dc.SetRGB255(waterColor.R, waterColor.G, waterColor.B)
-			} else if provinceOwner < 0 || provinceOwner >= len(allCivColors) {
-				// land doesn't belong to any owner
-				fmt.Println("Province owner", provinceOwner, "isn't a valid province")
-				dc.SetRGB255(unclaimedLandColor.R, unclaimedLandColor.G, unclaimedLandColor.B)
-			} else {
-				// belongs to province owner
-				provinceColor := allCivColors[provinceOwner]
-				fmt.Println("Drawing province", i, "with owner set to", provinceOwner)
-				dc.SetRGB255(provinceColor.IRed, provinceColor.IGreen, provinceColor.IBlue)
+			color, ownerValid := determineScenarioProvinceColor(province, provinceOwner, allCivColors)
+			if !isWaterProvince(province) {
+				if !ownerValid {
+					fmt.Println("Province owner", provinceOwner, "isn't a valid province")
+				} else {
+					fmt.Println("Drawing province", i, "with owner set to", provinceOwner)
+				}
 			}
+			color.Apply(dc)
 			dc.Fill()
 		}
 	}
@@ -81,7 +120,7 @@ func drawRegionsMap(outputFilename string, regionsMapData RegionsMapData) {
 	dc := gg.NewContext(int(regionsMapData.GlobalMaxX), int(regionsMapData.GlobalMaxY))
 
 	// water
-	dc.SetRGB255(waterColor.R, waterColor.G, waterColor.B)
+	waterColor.Apply(dc)
 	dc.Clear()
 
 	fmt.Println("Drawing map...")
@@ -94,51 +133,44 @@ func drawRegionsMap(outputFilename string, regionsMapData RegionsMapData) {
 	fmt.Println("Saved image to", outputFilename)
 }
 
+// determineTerrainColor returns the fill color for a province on the terrain map. Pure.
+func determineTerrainColor(province ProvinceGameData) Color {
+	if isWaterProvince(province) {
+		return waterColorAlt
+	}
+	return landColor
+}
+
 func drawProvinceTerrain(dc *gg.Context, allProvinceData [][]ProvinceGameData) {
 	for i := 0; i < len(allProvinceData); i++ {
 		for p := 0; p < len(allProvinceData[i]); p++ {
 			province := allProvinceData[i][p]
-			dc.MoveTo(float64(province.LPointsX[0]), float64(province.LPointsY[0]))
-			for j := 1; j < len(province.LPointsX); j++ {
-				dc.LineTo(float64(province.LPointsX[j]), float64(province.LPointsY[j]))
-			}
-			dc.ClosePath()
-
-			if province.ProvinceInfo.IContinentID == 0 || province.ProvinceInfo.STerrainTAG == "" {
-				// water
-				dc.SetRGB255(waterColorAlt.R, waterColorAlt.G, waterColorAlt.B)
-			} else {
-				// land
-				dc.SetRGB255(landColor.R, landColor.G, landColor.B)
-			}
+			buildProvincePath(dc, province)
+			determineTerrainColor(province).Apply(dc)
 			dc.Fill()
 		}
 	}
+}
+
+// determineRegionProvinceColor returns the fill color for a province on the regions map. Pure.
+func determineRegionProvinceColor(province ProvinceGameData, allRegionColors []RegionColor) FractionColor {
+	if isWaterProvince(province) {
+		return waterColor.toFraction()
+	}
+	regionId := province.ProvinceInfo.IRegionID
+	if regionId < 0 || regionId >= len(allRegionColors) {
+		return landColor.toFraction()
+	}
+	regionColor := allRegionColors[regionId]
+	return FractionColor{R: regionColor.FractionRed, G: regionColor.FractionGreen, B: regionColor.FractionBlue}
 }
 
 func drawProvinceRegionColors(dc *gg.Context, allProvinceData [][]ProvinceGameData, allRegionColors []RegionColor) {
 	for i := 0; i < len(allProvinceData); i++ {
 		for p := 0; p < len(allProvinceData[i]); p++ {
 			province := allProvinceData[i][p]
-
-			dc.MoveTo(float64(province.LPointsX[0]), float64(province.LPointsY[0]))
-			for j := 1; j < len(province.LPointsX); j++ {
-				dc.LineTo(float64(province.LPointsX[j]), float64(province.LPointsY[j]))
-			}
-			dc.ClosePath()
-
-			if province.ProvinceInfo.IContinentID == 0 || province.ProvinceInfo.STerrainTAG == "" {
-				// water
-				dc.SetRGB255(waterColor.R, waterColor.G, waterColor.B)
-			} else if province.ProvinceInfo.IRegionID < 0 || province.ProvinceInfo.IRegionID >= len(allRegionColors) {
-				// land doesn't belong to valid region
-				dc.SetRGB255(landColor.R, landColor.G, landColor.B)
-			} else {
-				// region color
-				regionId := province.ProvinceInfo.IRegionID
-				regionColor := allRegionColors[regionId]
-				dc.SetRGB(regionColor.FractionRed, regionColor.FractionGreen, regionColor.FractionBlue)
-			}
+			buildProvincePath(dc, province)
+			determineRegionProvinceColor(province, allRegionColors).Apply(dc)
 			dc.Fill()
 		}
 	}
@@ -148,7 +180,7 @@ func drawProvinceOutline(dc *gg.Context, allProvinceData [][]ProvinceGameData) {
 	for i := 0; i < len(allProvinceData); i++ {
 		for p := 0; p < len(allProvinceData[i]); p++ {
 			province := allProvinceData[i][p]
-			dc.SetRGB255(outlineColor.R, outlineColor.G, outlineColor.B)
+			outlineColor.Apply(dc)
 
 			for j := 0; j < len(province.LPointsX); j++ {
 				currentIndex := j % len(province.LPointsX)
@@ -162,38 +194,31 @@ func drawProvinceOutline(dc *gg.Context, allProvinceData [][]ProvinceGameData) {
 	}
 }
 
+// provinceBounds returns the axis-aligned bounding box of a province's points. Pure.
+func provinceBounds(province ProvinceGameData) (minX, minY, maxX, maxY float64) {
+	minX, minY = math.MaxFloat64, math.MaxFloat64
+	for j := 0; j < len(province.LPointsX); j++ {
+		x, y := float64(province.LPointsX[j]), float64(province.LPointsY[j])
+		minX, maxX = math.Min(minX, x), math.Max(maxX, x)
+		minY, maxY = math.Min(minY, y), math.Max(maxY, y)
+	}
+	return minX, minY, maxX, maxY
+}
+
+// provinceCenter returns the midpoint of a province's bounding box. Pure.
+func provinceCenter(province ProvinceGameData) (x, y float64) {
+	minX, minY, maxX, maxY := provinceBounds(province)
+	return (minX + maxX) / 2.0, (minY + maxY) / 2.0
+}
+
 func drawProvinceLabel(dc *gg.Context, allProvinceData [][]ProvinceGameData) {
 	for i := 0; i < len(allProvinceData); i++ {
 		for p := 0; p < len(allProvinceData[i]); p++ {
 			province := allProvinceData[i][p]
 
-			provinceMinX := math.MaxFloat64
-			provinceMinY := math.MaxFloat64
-			provinceMaxX := 0.0
-			provinceMaxY := 0.0
-
-			for j := 0; j < len(province.LPointsX); j++ {
-				currentIndex := j % len(province.LPointsX)
-
-				if float64(province.LPointsX[currentIndex]) > provinceMaxX {
-					provinceMaxX = float64(province.LPointsX[currentIndex])
-				}
-				if float64(province.LPointsY[currentIndex]) > provinceMaxY {
-					provinceMaxY = float64(province.LPointsY[currentIndex])
-				}
-				if float64(province.LPointsX[currentIndex]) < provinceMinX {
-					provinceMinX = float64(province.LPointsX[currentIndex])
-				}
-				if float64(province.LPointsY[currentIndex]) < provinceMinY {
-					provinceMinY = float64(province.LPointsY[currentIndex])
-				}
-			}
-
-			dc.SetRGB255(labelColor.R, labelColor.G, labelColor.B)
-			averageX := (provinceMinX + provinceMaxX) / 2.0
-			averageY := (provinceMinY + provinceMaxY) / 2.0
-			fmt.Println(fmt.Sprintf("Province %v bounds min(%v, %v), max (%v, %v), average(%v, %v)",
-				i, provinceMinX, provinceMinY, provinceMaxX, provinceMaxY, averageX, averageY))
+			labelColor.Apply(dc)
+			averageX, averageY := provinceCenter(province)
+			fmt.Printf("Province %v center at (%v, %v)\n", i, averageX, averageY)
 			dc.DrawString(strconv.Itoa(i), averageX, averageY)
 		}
 	}
